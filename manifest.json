@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.sykesthelord.expanded-defaults",
+  "name": "Expanded Defaults",
+  "version": "1.0.0",
+  "author": "sykesthelord",
+  "license": "MIT",
+  "description": "Adds default-app pickers (file manager, image viewer, PDF viewer, media player, mail client) and priority-ranked default device submenus (cameras, sound outputs, microphones) to the Omarchy start menu's Defaults section. This entry only tracks the install for update/remove -- the actual functionality is a menu JSONC extension, backend scripts, and a systemd --user watcher, installed by running ./install.sh from this repo, not a bar widget.",
+  "kinds": ["external-tool"],
+  "entryPoints": {}
+}
