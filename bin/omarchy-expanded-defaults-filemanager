@@ -1,0 +1,38 @@
+#!/bin/bash
+
+# omarchy:summary=Set the default file manager for Omarchy and XDG handlers
+# omarchy:args=[nautilus|thunar|pcmanfm|pcmanfm-qt|dolphin|nemo]
+# omarchy:examples=omarchy-expanded-defaults-filemanager thunar
+
+MIMETYPES=(inode/directory)
+
+if (($# == 0)); then
+  case "$(xdg-mime query default "${MIMETYPES[0]}" 2>/dev/null)" in
+  org.gnome.Nautilus.desktop) echo "nautilus" ;;
+  thunar.desktop) echo "thunar" ;;
+  pcmanfm.desktop) echo "pcmanfm" ;;
+  pcmanfm-qt.desktop) echo "pcmanfm-qt" ;;
+  org.kde.dolphin.desktop) echo "dolphin" ;;
+  nemo.desktop) echo "nemo" ;;
+  *) xdg-mime query default "${MIMETYPES[0]}" 2>/dev/null ;;
+  esac
+  exit 0
+fi
+
+case "$1" in
+nautilus) desktop_id="org.gnome.Nautilus.desktop"; name="Nautilus"; glyph=󰉋 ;;
+thunar) desktop_id="thunar.desktop"; name="Thunar"; glyph=󰝰 ;;
+pcmanfm) desktop_id="pcmanfm.desktop"; name="PCManFM"; glyph=󰝰 ;;
+pcmanfm-qt) desktop_id="pcmanfm-qt.desktop"; name="PCManFM-Qt"; glyph=󰝰 ;;
+dolphin) desktop_id="org.kde.dolphin.desktop"; name="Dolphin"; glyph=󰉋 ;;
+nemo) desktop_id="nemo.desktop"; name="Nemo"; glyph=󰝰 ;;
+*)
+  echo "Usage: omarchy-expanded-defaults-filemanager <nautilus|thunar|pcmanfm|pcmanfm-qt|dolphin|nemo>"
+  exit 1
+  ;;
+esac
+
+xdg-mime default "$desktop_id" "${MIMETYPES[@]}" || exit 1
+
+source "$(dirname "$(readlink -f "$0")")/lib/common.sh"
+omarchy_ed_notify "$glyph" "$name is now the default file manager"

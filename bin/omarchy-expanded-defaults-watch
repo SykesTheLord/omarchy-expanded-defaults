@@ -1,0 +1,39 @@
+#!/bin/bash
+
+# omarchy:summary=Watch for device hotplug and auto-apply the priority-ranked default
+# omarchy:hidden=true
+
+set -uo pipefail
+
+dir="$(dirname "$(readlink -f "$0")")"
+
+# `read` is a shell builtin -- draining a burst this way costs no forks, unlike
+# spawning a subprocess per line. Only after a real 1s gap of silence does a
+# burst turn into the (cheap, at most one per class) apply + menu-regenerate.
+watch_audio() {
+  while IFS= read -r _; do
+    while IFS= read -r -t 1 _; do :; done
+    "$dir/omarchy-expanded-defaults-apply" sinks 2>/dev/null || true
+    "$dir/omarchy-expanded-defaults-apply" sources 2>/dev/null || true
+    "$dir/omarchy-expanded-defaults-menu-regenerate" 2>/dev/null || true
+  done < <(pactl subscribe 2>/dev/null | grep --line-buffered -E "Event '(new|remove)' on (sink|source) ")
+}
+
+watch_cameras() {
+  while IFS= read -r _; do
+    while IFS= read -r -t 1 _; do :; done
+    "$dir/omarchy-expanded-defaults-apply" cameras 2>/dev/null || true
+    "$dir/omarchy-expanded-defaults-menu-regenerate" 2>/dev/null || true
+  done < <(udevadm monitor -u -s video4linux 2>/dev/null)
+}
+
+# Apply once on startup so a login/session restart picks up whatever changed
+# while the watcher wasn't running.
+"$dir/omarchy-expanded-defaults-apply" sinks 2>/dev/null || true
+"$dir/omarchy-expanded-defaults-apply" sources 2>/dev/null || true
+"$dir/omarchy-expanded-defaults-apply" cameras 2>/dev/null || true
+"$dir/omarchy-expanded-defaults-menu-regenerate" 2>/dev/null || true
+
+watch_audio &
+watch_cameras &
+wait

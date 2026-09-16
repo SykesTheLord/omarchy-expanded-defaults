@@ -1,0 +1,15 @@
+[Unit]
+Description=Omarchy Expanded Defaults device priority watcher
+After=pipewire.service wireplumber.service
+Requires=pipewire.service
+Wants=wireplumber.service
+PartOf=pipewire.service
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/omarchy-expanded-defaults-watch
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

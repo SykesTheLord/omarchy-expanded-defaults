@@ -1,0 +1,55 @@
+#!/bin/bash
+
+# omarchy:summary=List devices for a class in priority order, as JSON
+# omarchy:args=<sinks|sources|cameras>
+# omarchy:examples=omarchy-expanded-defaults-priority-list sinks
+
+set -euo pipefail
+
+dir="$(dirname "$(readlink -f "$0")")"
+source "$dir/lib/common.sh"
+source "$dir/lib/devices.sh"
+
+class="${1:-}"
+case "$class" in
+sinks | sources | cameras) ;;
+*)
+  echo "Usage: omarchy-expanded-defaults-priority-list <sinks|sources|cameras>" >&2
+  exit 1
+  ;;
+esac
+
+omarchy_ed_ensure_store
+
+case "$class" in
+sinks) connected=$(omarchy_ed_list_sinks_json) ;;
+sources) connected=$(omarchy_ed_list_sources_json) ;;
+cameras) connected=$(omarchy_ed_list_cameras_json) ;;
+esac
+
+connected_min=$(jq '[.[] | {id: (.id // .name), description: (.description // .name)}]' <<<"$connected")
+connected_obj=$(jq 'map({(.id): .description}) | add // {}' <<<"$connected_min")
+known=$(jq --arg class "$class" '.[$class] // []' "$OMARCHY_ED_PRIORITIES")
+
+# Newly-seen connected devices join the end of the priority order (lowest
+# priority by default); devices already known keep their rank and pick up a
+# refreshed description if one is available now.
+merged=$(jq -n --argjson known "$known" --argjson connected_obj "$connected_obj" --argjson connected "$connected_min" '
+  ($known | map(.id)) as $known_ids
+  | ($known | map(. as $k | {id: $k.id, description: ($connected_obj[$k.id] // $k.description)}))
+    + ($connected | map(select((. as $c | $known_ids | index($c.id)) == null)))
+')
+
+tmp=$(mktemp)
+jq --arg class "$class" --argjson merged "$merged" '.[$class] = $merged' "$OMARCHY_ED_PRIORITIES" >"$tmp"
+mv "$tmp" "$OMARCHY_ED_PRIORITIES"
+
+jq --argjson connected "$connected_min" '
+  ($connected | map(.id)) as $connected_ids
+  | to_entries | map({
+      rank: (.key + 1),
+      id: .value.id,
+      description: .value.description,
+      connected: ((.value as $v | $connected_ids | index($v.id)) != null)
+    })
+' <<<"$merged"

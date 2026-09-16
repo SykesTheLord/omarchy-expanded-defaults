@@ -1,0 +1,34 @@
+#!/bin/bash
+
+# omarchy:summary=Set the default mail client for Omarchy and XDG handlers
+# omarchy:args=[thunderbird|geary|evolution|kmail]
+# omarchy:examples=omarchy-expanded-defaults-mailclient thunderbird
+
+MIMETYPES=(x-scheme-handler/mailto)
+
+if (($# == 0)); then
+  case "$(xdg-mime query default "${MIMETYPES[0]}" 2>/dev/null)" in
+  thunderbird.desktop) echo "thunderbird" ;;
+  org.gnome.Geary.desktop) echo "geary" ;;
+  org.gnome.Evolution.desktop) echo "evolution" ;;
+  org.kde.kmail2.desktop) echo "kmail" ;;
+  *) xdg-mime query default "${MIMETYPES[0]}" 2>/dev/null ;;
+  esac
+  exit 0
+fi
+
+case "$1" in
+thunderbird) desktop_id="thunderbird.desktop"; name="Thunderbird"; glyph=󰇮 ;;
+geary) desktop_id="org.gnome.Geary.desktop"; name="Geary"; glyph=󰇮 ;;
+evolution) desktop_id="org.gnome.Evolution.desktop"; name="Evolution"; glyph=󰇮 ;;
+kmail) desktop_id="org.kde.kmail2.desktop"; name="KMail"; glyph=󰇮 ;;
+*)
+  echo "Usage: omarchy-expanded-defaults-mailclient <thunderbird|geary|evolution|kmail>"
+  exit 1
+  ;;
+esac
+
+xdg-mime default "$desktop_id" "${MIMETYPES[@]}" || exit 1
+
+source "$(dirname "$(readlink -f "$0")")/lib/common.sh"
+omarchy_ed_notify "$glyph" "$name is now the default mail client"

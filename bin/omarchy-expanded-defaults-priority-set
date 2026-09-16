@@ -1,0 +1,44 @@
+#!/bin/bash
+
+# omarchy:summary=Move a device to a given priority rank and apply the change
+# omarchy:args=<sinks|sources|cameras> <device-id> <rank>
+# omarchy:examples=omarchy-expanded-defaults-priority-set sources alsa_input.usb-foo-00.mono-fallback 1
+
+set -euo pipefail
+
+dir="$(dirname "$(readlink -f "$0")")"
+source "$dir/lib/common.sh"
+
+class="${1:-}"
+id="${2:-}"
+rank="${3:-}"
+
+case "$class" in
+sinks | sources | cameras) ;;
+*)
+  echo "Usage: omarchy-expanded-defaults-priority-set <sinks|sources|cameras> <device-id> <rank>" >&2
+  exit 1
+  ;;
+esac
+
+if [[ -z $id || ! $rank =~ ^[0-9]+$ || $rank -lt 1 ]]; then
+  echo "Usage: omarchy-expanded-defaults-priority-set <sinks|sources|cameras> <device-id> <rank>" >&2
+  exit 1
+fi
+
+omarchy_ed_ensure_store
+
+tmp=$(mktemp)
+jq --arg class "$class" --arg id "$id" --argjson rank "$rank" '
+  (.[$class] // []) as $list
+  | ($list | map(select(.id == $id)) | .[0]) as $entry
+  | (if $entry == null then $list else ($list | map(select(.id != $id))) end) as $rest
+  | (if $entry == null then $list else
+      ($rest[0:($rank - 1)] + [$entry] + $rest[($rank - 1):])
+    end) as $reordered
+  | .[$class] = $reordered
+' "$OMARCHY_ED_PRIORITIES" >"$tmp"
+mv "$tmp" "$OMARCHY_ED_PRIORITIES"
+
+"$dir/omarchy-expanded-defaults-apply" "$class" || true
+"$dir/omarchy-expanded-defaults-menu-regenerate" || true

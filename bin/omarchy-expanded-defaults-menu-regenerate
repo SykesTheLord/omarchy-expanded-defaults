@@ -1,0 +1,78 @@
+#!/bin/bash
+
+# omarchy:summary=Regenerate the Defaults > Devices menu entries from current priorities
+# omarchy:hidden=true
+
+set -euo pipefail
+
+dir="$(dirname "$(readlink -f "$0")")"
+source "$dir/lib/common.sh"
+
+slugify() {
+  local s
+  s=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g')
+  [[ -n $s ]] && printf '%s' "$s" || printf 'item'
+}
+
+ordinal() {
+  local n="$1"
+  case "$n" in
+  1) echo "1st" ;;
+  2) echo "2nd" ;;
+  3) echo "3rd" ;;
+  *) echo "${n}th" ;;
+  esac
+}
+
+json_str() { jq -Rn --arg s "$1" '$s'; }
+
+emit_class() {
+  local class="$1" parent_id="$2" parent_label="$3" parent_icon="$4" glyph="$5"
+  local rows
+  rows=$("$dir/omarchy-expanded-defaults-priority-list" "$class")
+  local count
+  count=$(jq 'length' <<<"$rows")
+
+  printf '  %s: {"icon":%s,"label":%s,"title":%s},\n' \
+    "$(json_str "$parent_id")" "$(json_str "$parent_icon")" "$(json_str "$parent_label")" "$(json_str "$parent_label")"
+
+  jq -c '.[]' <<<"$rows" | while IFS= read -r row; do
+    local id rank description connected slug device_id device_label
+    id=$(jq -r '.id' <<<"$row")
+    rank=$(jq -r '.rank' <<<"$row")
+    description=$(jq -r '.description' <<<"$row")
+    connected=$(jq -r '.connected' <<<"$row")
+    slug=$(slugify "$id")
+    device_id="${parent_id}.${slug}"
+    device_label="$rank. $description"
+    [[ $connected == "true" ]] || device_label="$device_label (disconnected)"
+
+    printf '  %s: {"icon":%s,"label":%s,"title":%s},\n' \
+      "$(json_str "$device_id")" "$(json_str "$glyph")" "$(json_str "$device_label")" "$(json_str "$description")"
+
+    local id_q
+    id_q=$(printf '%q' "$id")
+
+    local n
+    for ((n = 1; n <= count; n++)); do
+      local rank_id checked action
+      rank_id="${device_id}.rank${n}"
+      checked="[[ \"\$(omarchy-expanded-defaults-priority-rank $class $id_q)\" == \"$n\" ]]"
+      action="omarchy-expanded-defaults-priority-set $class $id_q $n"
+      printf '  %s: {"icon":%s,"label":%s,"checked":%s,"action":%s},\n' \
+        "$(json_str "$rank_id")" "$(json_str "$glyph")" "$(json_str "Make $(ordinal "$n") priority")" \
+        "$(json_str "$checked")" "$(json_str "$action")"
+    done
+  done
+}
+
+content_file=$(mktemp)
+{
+  printf '  %s: {"icon":"","label":"Devices","title":"Default Devices"},\n' "$(json_str "setup.default.devices")"
+  emit_class sinks "setup.default.devices.outputs" "Sound Outputs" "" "󰕾"
+  emit_class sources "setup.default.devices.microphones" "Microphones" "" "󰍬"
+  emit_class cameras "setup.default.devices.cameras" "Cameras" "" "󰄀"
+} >"$content_file"
+
+omarchy_ed_splice_menu_block "devices" "$content_file"
+rm -f "$content_file"

@@ -1,0 +1,53 @@
+#!/bin/bash
+
+# omarchy:summary=Apply the highest-priority currently-connected device for a class
+# omarchy:args=<sinks|sources|cameras>
+# omarchy:examples=omarchy-expanded-defaults-apply sinks
+
+set -euo pipefail
+
+dir="$(dirname "$(readlink -f "$0")")"
+source "$dir/lib/common.sh"
+source "$dir/lib/devices.sh"
+
+class="${1:-}"
+case "$class" in
+sinks | sources | cameras) ;;
+*)
+  echo "Usage: omarchy-expanded-defaults-apply <sinks|sources|cameras>" >&2
+  exit 1
+  ;;
+esac
+
+ranked=$("$dir/omarchy-expanded-defaults-priority-list" "$class")
+best=$(jq -c '[.[] | select(.connected)] | sort_by(.rank) | .[0] // empty' <<<"$ranked")
+
+[[ -n $best ]] || exit 0
+
+best_id=$(jq -r '.id' <<<"$best")
+best_description=$(jq -r '.description' <<<"$best")
+
+case "$class" in
+sinks)
+  index=$(jq -r --arg id "$best_id" 'map(select(.name == $id)) | .[0].index // empty' <<<"$(omarchy_ed_list_sinks_json)")
+  [[ -n $index ]] || exit 0
+  current=$(timeout 2 pactl get-default-sink 2>/dev/null || true)
+  [[ $current == "$best_id" ]] || omarchy-audio-output-set-default "$index" "$best_id"
+  ;;
+sources)
+  index=$(jq -r --arg id "$best_id" 'map(select(.name == $id)) | .[0].index // empty' <<<"$(omarchy_ed_list_sources_json)")
+  [[ -n $index ]] || exit 0
+  current=$(timeout 2 pactl get-default-source 2>/dev/null || true)
+  [[ $current == "$best_id" ]] || omarchy-audio-input-set-default "$index" "$best_id"
+  ;;
+cameras)
+  dev=$(jq -r --arg id "$best_id" 'map(select(.id == $id)) | .[0].dev // empty' <<<"$(omarchy_ed_list_cameras_json)")
+  [[ -n $dev ]] || exit 0
+  current=$(readlink "$OMARCHY_ED_CAMERA_LINK" 2>/dev/null || true)
+  if [[ $current != "$dev" ]]; then
+    mkdir -p "$(dirname "$OMARCHY_ED_CAMERA_LINK")"
+    ln -sfn "$dev" "$OMARCHY_ED_CAMERA_LINK"
+    omarchy_ed_notify "󰄀" "$best_description is now the default camera"
+  fi
+  ;;
+esac

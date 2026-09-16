@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# omarchy:summary=Set the default image viewer for Omarchy and XDG handlers
+# omarchy:args=[imv|loupe|feh|gwenview|eog]
+# omarchy:examples=omarchy-expanded-defaults-imageviewer imv
+
+MIMETYPES=(image/png image/jpeg image/gif image/bmp image/webp image/tiff image/svg+xml)
+
+if (($# == 0)); then
+  case "$(xdg-mime query default "${MIMETYPES[0]}" 2>/dev/null)" in
+  imv.desktop) echo "imv" ;;
+  org.gnome.Loupe.desktop) echo "loupe" ;;
+  feh.desktop) echo "feh" ;;
+  org.kde.gwenview.desktop) echo "gwenview" ;;
+  org.gnome.eog.desktop) echo "eog" ;;
+  *) xdg-mime query default "${MIMETYPES[0]}" 2>/dev/null ;;
+  esac
+  exit 0
+fi
+
+case "$1" in
+imv) desktop_id="imv.desktop"; name="imv"; glyph=󰋩 ;;
+loupe) desktop_id="org.gnome.Loupe.desktop"; name="Loupe"; glyph=󰋩 ;;
+feh) desktop_id="feh.desktop"; name="feh"; glyph=󰋩 ;;
+gwenview) desktop_id="org.kde.gwenview.desktop"; name="Gwenview"; glyph=󰋩 ;;
+eog) desktop_id="org.gnome.eog.desktop"; name="Eye of GNOME"; glyph=󰋩 ;;
+*)
+  echo "Usage: omarchy-expanded-defaults-imageviewer <imv|loupe|feh|gwenview|eog>"
+  exit 1
+  ;;
+esac
+
+xdg-mime default "$desktop_id" "${MIMETYPES[@]}" || exit 1
+
+source "$(dirname "$(readlink -f "$0")")/lib/common.sh"
+omarchy_ed_notify "$glyph" "$name is now the default image viewer"
